@@ -6,13 +6,15 @@
     <title>Игра: Лифт (Склад)</title>
     <style>
         :root {
-            --cell-size: 55px; /* Базовый размер клетки */
+            --cell-size: 55px;
             --bg-color: #1e293b;
             --text-color: #f8fafc;
             --grid-color: #334155;
             --green: #22c55e;
             --yellow: #eab308;
             --red: #ef4444;
+            --btn-blue: #3b82f6;
+            --btn-dark: #64748b;
         }
 
         * { box-sizing: border-box; touch-action: manipulation; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -23,76 +25,98 @@
             user-select: none; -webkit-user-select: none;
         }
 
-        /* Шапка с очками */
-        header {
-            width: 100%; max-width: 400px; display: flex; justify-content: space-between;
-            padding: 15px 20px; font-weight: bold; font-size: 1.1rem;
+        /* Система экранов */
+        .screen {
+            display: none; width: 100%; max-width: 400px; flex-direction: column; 
+            align-items: center; flex: 1; padding: 20px;
         }
+        .screen.active { display: flex; }
+
+        /* Типографика меню */
+        h1 { font-size: 2.5rem; color: #fff; margin-bottom: 40px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        h2 { color: #fff; margin-bottom: 20px; }
+        .menu-btn {
+            width: 100%; padding: 15px; margin-bottom: 15px; border: none; border-radius: 8px;
+            font-size: 1.2rem; font-weight: bold; color: #fff; background: var(--btn-blue);
+            cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .menu-btn:active { transform: scale(0.98); }
+        .menu-btn:disabled { background: var(--grid-color); color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+        .menu-btn.secondary { background: var(--btn-dark); }
+
+        /* Текстовые блоки для правил и рекордов */
+        .text-box {
+            background: #0f172a; padding: 20px; border-radius: 12px; width: 100%;
+            margin-bottom: 20px; color: #cbd5e1; font-size: 1rem; line-height: 1.5;
+        }
+        .record-item {
+            display: flex; justify-content: space-between; padding: 10px 0;
+            border-bottom: 1px solid var(--grid-color); font-size: 1.1rem;
+        }
+        .record-item:last-child { border-bottom: none; }
+        .record-score { font-weight: bold; color: var(--yellow); }
+        .record-date { color: #94a3b8; font-size: 0.9rem; }
+
+        /* Игровой интерфейс */
+        #screen-game { padding: 0; justify-content: space-between; }
         
+        header {
+            width: 100%; display: flex; justify-content: space-between;
+            padding: 15px 20px; font-weight: bold; font-size: 1.1rem; background: #0f172a;
+        }
         .level-text { color: #94a3b8; }
 
-        /* Игровые зоны */
         .game-area {
             flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-            gap: 20px; padding: 10px; width: 100%; max-width: 400px;
+            gap: 15px; padding: 15px; width: 100%;
         }
+
+        .zone-header { text-align: center; width: 100%; }
+        .zone-title { font-size: 1.1rem; font-weight: bold; color: #cbd5e1; text-transform: uppercase; letter-spacing: 1px; }
+        .zone-subtitle { font-size: 0.85rem; color: #94a3b8; margin-top: 3px; }
 
         .grid-container {
             position: relative; background: #0f172a; border: 2px solid var(--grid-color);
             border-radius: 8px; overflow: hidden;
         }
 
-        /* Сетка склада 4x4 */
         #warehouse { width: calc(var(--cell-size) * 4); height: calc(var(--cell-size) * 4); }
-        
-        /* Сетка лифта 3x2 */
         #elevator { width: calc(var(--cell-size) * 3); height: calc(var(--cell-size) * 2); border-color: #64748b; }
 
-        /* Отрисовка клеток внутри сеток */
         .cell-bg {
             position: absolute; width: var(--cell-size); height: var(--cell-size);
             border: 1px dashed var(--grid-color);
         }
-
-        /* Кнопки-невидимки поверх лифта для расстановки */
         .elevator-slot {
-            position: absolute; width: var(--cell-size); height: var(--cell-size);
-            z-index: 10; cursor: pointer;
+            position: absolute; width: var(--cell-size); height: var(--cell-size); z-index: 10; cursor: pointer;
         }
 
-        /* Грузы (Item) */
+        /* Грузы (Item) - Улучшенные контуры */
         .item {
             position: absolute; cursor: pointer; transition: transform 0.1s; z-index: 20;
+            /* Тень объединяет блоки в одну фигуру */
+            filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.6));
         }
-        .item.selected { transform: scale(1.05); filter: drop-shadow(0 0 8px rgba(255,255,255,0.5)); z-index: 30; }
+        .item.selected { transform: scale(1.05); filter: drop-shadow(0 0 10px rgba(255,255,255,0.4)); z-index: 30; }
         
-        /* Квадратики внутри груза */
         .item-block {
             position: absolute; width: var(--cell-size); height: var(--cell-size);
-            border: 2px solid rgba(0,0,0,0.3); border-radius: 4px;
+            /* Жесткие границы внутри блоков, чтобы они казались спаянными, но различаемыми */
+            border: 2px solid #0f172a; 
             display: flex; align-items: center; justify-content: center;
             font-weight: bold; font-size: 1.1rem; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
         }
 
         /* Панель управления */
         .controls {
-            width: 100%; max-width: 400px; padding: 20px; background: #0f172a;
+            width: 100%; padding: 20px; background: #0f172a;
             border-top-left-radius: 20px; border-top-right-radius: 20px;
             display: flex; flex-direction: column; gap: 10px; margin-top: auto;
         }
 
-        .weight-display {
-            text-align: center; font-size: 1.3rem; font-weight: bold; margin-bottom: 5px; transition: color 0.3s;
-        }
+        .weight-display { text-align: center; font-size: 1.3rem; font-weight: bold; margin-bottom: 5px; transition: color 0.3s; }
         .weight-bar-bg { width: 100%; height: 10px; background: #334155; border-radius: 5px; overflow: hidden; }
         .weight-bar-fill { height: 100%; background: var(--green); transition: width 0.3s, background 0.3s; }
-
-        button {
-            padding: 15px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold;
-            color: #fff; background: #3b82f6; cursor: pointer; transition: 0.2s;
-        }
-        button:active { transform: scale(0.98); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* Состояния кнопки и лифта */
         .btn-overweight { background: var(--red) !important; opacity: 1 !important; color: white !important; }
@@ -105,56 +129,96 @@
         }
         .shake { animation: shake 0.2s ease-in-out infinite; border-color: var(--red) !important; }
 
-        /* Всплывающие сообщения */
+        /* Всплывающее окно */
         .overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: none; flex-direction: column;
-            align-items: center; justify-content: center; z-index: 100;
+            background: rgba(0,0,0,0.85); display: none; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 100; padding: 20px;
         }
         .overlay-content {
-            background: #1e293b; padding: 30px; border-radius: 12px; text-align: center; max-width: 80%;
+            background: #1e293b; padding: 30px 20px; border-radius: 12px; text-align: center; width: 100%; max-width: 360px;
         }
-        .overlay h2 { margin-top: 0; color: #fff; }
-        .overlay p { color: #cbd5e1; margin-bottom: 20px; font-size: 1.1rem; }
+        .overlay h2 { margin-top: 0; color: #fff; font-size: 1.5rem; }
+        .overlay p { color: #cbd5e1; margin-bottom: 25px; font-size: 1.05rem; line-height: 1.4; }
+        .overlay-buttons { display: flex; flex-direction: column; gap: 10px; }
+        
     </style>
 </head>
 <body>
 
-    <header>
-        <div>Счет: <span id="score">0</span> <span style="font-size: 0.8rem; color: #fbbf24;">(Рекорд: <span id="best-score">0</span>)</span></div>
-        <div class="level-text">Уровень <span id="level">1</span></div>
-    </header>
-
-    <div class="game-area">
-        <div id="warehouse" class="grid-container"></div>
-        
-        <div style="color: #94a3b8; font-size: 0.9rem;">ЛИФТ (Макс. 60 кг)</div>
-        <div id="elevator" class="grid-container"></div>
+    <div id="screen-menu" class="screen active">
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width: 100%;">
+            <h1 style="text-align: center;">ЛИФТ</h1>
+            <button class="menu-btn" onclick="startGameSession()">Играть</button>
+            <button class="menu-btn" id="btn-records-menu" onclick="openScreen('screen-records')">Рекорды</button>
+            <button class="menu-btn secondary" onclick="openScreen('screen-rules')">Правила</button>
+        </div>
     </div>
 
-    <div class="controls">
-        <div id="weight-text" class="weight-display">0 / 60 кг</div>
-        <div class="weight-bar-bg"><div id="weight-bar" class="weight-bar-fill" style="width: 0%;"></div></div>
-        
-        <button id="btn-send" onclick="sendElevator()">ОТПРАВИТЬ (1/3)</button>
-        <button id="btn-restart" onclick="restartLevel()" style="background: #64748b; display: none;">Переиграть уровень (Осталось: 1)</button>
+    <div id="screen-rules" class="screen">
+        <h2>Правила игры</h2>
+        <div class="text-box">
+            У вас есть склад с товарами и лифт. Ваша цель — загрузить и отправить все товары за <b>3 рейса</b>.<br><br>
+            • Тапайте по товарам, чтобы переместить их в лифт.<br>
+            • Лифт вмещает максимум <b>6 ячеек</b> объема и <b>60 кг</b> веса.<br>
+            • Если вес перевалит за 60 кг, вы не сможете отправить лифт.<br>
+            • Если заполнить лифт ровно на 60 кг — вы получите <b>+10% очков</b>.<br>
+            • Игра заканчивается, если у вас закончились рейсы, а на складе остался товар.
+        </div>
+        <button class="menu-btn secondary" onclick="openScreen('screen-menu')">Назад</button>
+    </div>
+
+    <div id="screen-records" class="screen">
+        <h2>Топ-3 Рекорда</h2>
+        <div class="text-box" id="records-list">
+            </div>
+        <button class="menu-btn secondary" onclick="openScreen('screen-menu')">Назад</button>
+    </div>
+
+    <div id="screen-game" class="screen">
+        <header>
+            <div>Счет: <span id="score">0</span></div>
+            <div class="level-text">Уровень <span id="level">1</span></div>
+        </header>
+
+        <div class="game-area">
+            <div class="zone-header">
+                <div class="zone-title">Склад</div>
+                <div class="zone-subtitle">Загрузите все товары в лифт</div>
+            </div>
+            <div id="warehouse" class="grid-container"></div>
+            
+            <div class="zone-header" style="margin-top: 5px;">
+                <div class="zone-title">Лифт</div>
+                <div class="zone-subtitle">Максимум 6 ячеек и 60 кг</div>
+            </div>
+            <div id="elevator" class="grid-container"></div>
+        </div>
+
+        <div class="controls">
+            <div id="weight-text" class="weight-display">0 / 60 кг</div>
+            <div class="weight-bar-bg"><div id="weight-bar" class="weight-bar-fill" style="width: 0%;"></div></div>
+            
+            <button class="menu-btn" id="btn-send" onclick="sendElevator()" style="margin-bottom: 0;">ОТПРАВИТЬ (1/3)</button>
+            <button class="menu-btn secondary" id="btn-restart" onclick="restartLevel()" style="display: none; padding: 10px; margin-bottom: 0;">Переиграть уровень (Осталось: 1)</button>
+        </div>
     </div>
 
     <div id="overlay" class="overlay">
         <div class="overlay-content">
             <h2 id="overlay-title">Заголовок</h2>
             <p id="overlay-text">Текст</p>
-            <button onclick="nextAction()" id="overlay-btn">Продолжить</button>
+            <div id="overlay-buttons" class="overlay-buttons">
+                </div>
         </div>
     </div>
 
 <script>
-    // --- НАСТРОЙКИ И БАЗА ДАННЫХ ФИГУР ---
+    // --- НАСТРОЙКИ ---
     const CELL_SIZE = 55;
     const MAX_WEIGHT = 60;
     const MAX_TRIPS = 3;
 
-    // Матрицы: 1 = занято, 0 = пусто
     const SHAPES = [
         { m: [[1]], w: 5, c: 'green' },
         { m: [[1]], w: 10, c: 'yellow' },
@@ -165,26 +229,86 @@
         { m: [[1], [1]], w: 5, c: 'green' },
         { m: [[1], [1]], w: 10, c: 'yellow' },
         { m: [[1], [1]], w: 20, c: 'red' },
-        { m: [[1, 1], [1, 0]], w: 20, c: 'red' } // L-уголок
+        { m: [[1, 1], [1, 0]], w: 20, c: 'red' }
     ];
 
     const COLORS = { 'green': '#22c55e', 'yellow': '#eab308', 'red': '#ef4444' };
 
-    // --- СОСТОЯНИЕ ИГРЫ ---
     let gameState = {
-        level: 1,
-        score: 0,
-        levelStartScore: 0,
-        bestScore: parseInt(localStorage.getItem('liftBestScore')) || 0,
-        restartsLeft: 1,
-        tripsDone: 0,
-        items: [],
-        selectedId: null
+        level: 1, score: 0, levelStartScore: 0,
+        restartsLeft: 1, tripsDone: 0, items: [], selectedId: null
     };
 
-    // --- ИНИЦИАЛИЗАЦИЯ И РЕНДЕР ---
-    document.getElementById('best-score').innerText = gameState.bestScore;
+    // --- УПРАВЛЕНИЕ ЭКРАНАМИ ---
+    function openScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'screen-menu') updateMainMenu();
+        if(id === 'screen-records') renderRecords();
+    }
 
+    // --- РЕКОРДЫ ---
+    function getRecords() {
+        return JSON.parse(localStorage.getItem('liftRecords')) || [];
+    }
+
+    function saveRecord(score) {
+        if (score <= 0) return;
+        let recs = getRecords();
+        let dateStr = new Date().toLocaleDateString('ru-RU');
+        recs.push({ score: score, date: dateStr });
+        recs.sort((a, b) => b.score - a.score);
+        recs = recs.slice(0, 3);
+        localStorage.setItem('liftRecords', JSON.stringify(recs));
+    }
+
+    function updateMainMenu() {
+        const recs = getRecords();
+        document.getElementById('btn-records-menu').disabled = recs.length === 0;
+    }
+
+    function renderRecords() {
+        const recs = getRecords();
+        const container = document.getElementById('records-list');
+        if (recs.length === 0) {
+            container.innerHTML = 'Нет сохраненных результатов.';
+            return;
+        }
+        container.innerHTML = recs.map((r, i) => `
+            <div class="record-item">
+                <span>#${i + 1} <span class="record-date">(${r.date})</span></span>
+                <span class="record-score">${r.score} кг</span>
+            </div>
+        `).join('');
+    }
+
+    // --- ЗАПУСК ИГРЫ ---
+    function startGameSession() {
+        gameState.score = 0;
+        gameState.level = 1;
+        gameState.restartsLeft = 1;
+        openScreen('screen-game');
+        startLevel();
+    }
+
+    function startLevel() {
+        gameState.levelStartScore = gameState.score;
+        gameState.tripsDone = 0;
+        gameState.selectedId = null;
+        gameState.items = generateLevel();
+        
+        document.getElementById('level').innerText = gameState.level;
+        document.getElementById('score').innerText = gameState.score;
+        
+        initGrid('warehouse', 4, 4);
+        initGrid('elevator', 3, 2);
+        
+        updateRestartButton();
+        renderItems();
+        updateUI();
+    }
+
+    // --- ГЕНЕРАТОР УРОВНЕЙ И СЕТКА ---
     function initGrid(elementId, cols, rows) {
         const container = document.getElementById(elementId);
         container.innerHTML = '';
@@ -192,15 +316,13 @@
             for (let x = 0; x < cols; x++) {
                 const cell = document.createElement('div');
                 cell.className = 'cell-bg';
-                cell.style.left = `${x * CELL_SIZE}px`;
-                cell.style.top = `${y * CELL_SIZE}px`;
+                cell.style.left = `${x * CELL_SIZE}px`; cell.style.top = `${y * CELL_SIZE}px`;
                 container.appendChild(cell);
 
                 if (elementId === 'elevator') {
                     const slot = document.createElement('div');
                     slot.className = 'elevator-slot';
-                    slot.style.left = `${x * CELL_SIZE}px`;
-                    slot.style.top = `${y * CELL_SIZE}px`;
+                    slot.style.left = `${x * CELL_SIZE}px`; slot.style.top = `${y * CELL_SIZE}px`;
                     slot.onclick = () => placeItemInElevator(x, y);
                     container.appendChild(slot);
                 }
@@ -208,7 +330,6 @@
         }
     }
 
-    // --- ГЕНЕРАТОР УРОВНЕЙ ---
     function generateLevel() {
         let validLevel = false;
         let generatedItems = [];
@@ -217,9 +338,8 @@
             generatedItems = [];
             let totalCells = 0;
 
-            // 1. Симулируем 3 ходки, заполняя лифты
             for (let t = 0; t < MAX_TRIPS; t++) {
-                let grid = [[0, 0, 0], [0, 0, 0]]; // Сетка лифта 3x2
+                let grid = [[0, 0, 0], [0, 0, 0]];
                 let currentWeight = 0;
                 let attempts = 30;
 
@@ -237,22 +357,16 @@
                         
                         generatedItems.push({
                             id: Math.random().toString(36).substr(2, 9),
-                            m: shapeTemplate.m,
-                            w: shapeTemplate.w,
-                            c: shapeTemplate.c,
-                            inElevator: false
+                            m: shapeTemplate.m, w: shapeTemplate.w, c: shapeTemplate.c, inElevator: false
                         });
                     }
                 }
             }
 
-            // 2. Проверяем ограничения (13-16 клеток)
             if (totalCells >= 13 && totalCells <= 16) {
-                // 3. Пытаемся разложить всё это на складе 4x4
                 let wGrid = [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]];
                 let allFitted = true;
                 
-                // Сортировка по размеру помогает упаковывать плотнее
                 generatedItems.sort((a, b) => getCellCount(b.m) - getCellCount(a.m));
 
                 for (let item of generatedItems) {
@@ -261,8 +375,7 @@
                         for (let x = 0; x < 4 && !placed; x++) {
                             if (canPlace(wGrid, item.m, x, y)) {
                                 placeInGrid(wGrid, item.m, x, y, 1);
-                                item.wx = x; item.wy = y; // Родные координаты на складе
-                                item.cx = x; item.cy = y; // Текущие координаты
+                                item.wx = x; item.wy = y; item.cx = x; item.cy = y;
                                 placed = true;
                             }
                         }
@@ -272,27 +385,10 @@
                 if (allFitted) validLevel = true;
             }
         }
-        return JSON.parse(JSON.stringify(generatedItems)); // Глубокая копия
+        return JSON.parse(JSON.stringify(generatedItems));
     }
 
-    function startGame() {
-        gameState.levelStartScore = gameState.score;
-        gameState.tripsDone = 0;
-        gameState.selectedId = null;
-        gameState.items = generateLevel();
-        
-        document.getElementById('level').innerText = gameState.level;
-        document.getElementById('score').innerText = gameState.score;
-        
-        initGrid('warehouse', 4, 4);
-        initGrid('elevator', 3, 2);
-        
-        updateRestartButton();
-        renderItems();
-        updateUI();
-    }
-
-    // --- РЕНДЕРИНГ И ВЗАИМОДЕЙСТВИЕ ---
+    // --- РЕНДЕРИНГ И ЛОГИКА ---
     function renderItems() {
         document.querySelectorAll('.item').forEach(el => el.remove());
 
@@ -303,7 +399,6 @@
             div.className = `item ${gameState.selectedId === item.id ? 'selected' : ''}`;
             div.onclick = () => selectItem(item.id);
             
-            // Отрисовка блоков внутри матрицы предмета
             let isFirstSolid = true;
             for (let r = 0; r < item.m.length; r++) {
                 for (let c = 0; c < item.m[r].length; c++) {
@@ -323,100 +418,59 @@
                 }
             }
 
-            div.style.left = `${item.cx * CELL_SIZE}px`;
-            div.style.top = `${item.cy * CELL_SIZE}px`;
-
-            const parentId = item.inElevator ? 'elevator' : 'warehouse';
-            document.getElementById(parentId).appendChild(div);
+            div.style.left = `${item.cx * CELL_SIZE}px`; div.style.top = `${item.cy * CELL_SIZE}px`;
+            document.getElementById(item.inElevator ? 'elevator' : 'warehouse').appendChild(div);
         });
     }
 
     function selectItem(id) {
         const item = gameState.items.find(i => i.id === id);
-        
-        // Если тапнули на предмет в лифте - возвращаем на склад
         if (item.inElevator) {
-            item.inElevator = false;
-            item.cx = item.wx;
-            item.cy = item.wy;
+            item.inElevator = false; item.cx = item.wx; item.cy = item.wy;
             if (gameState.selectedId === id) gameState.selectedId = null;
         } else {
-            // Выделяем предмет на складе
             gameState.selectedId = gameState.selectedId === id ? null : id;
         }
-        
-        renderItems();
-        updateUI();
+        renderItems(); updateUI();
     }
 
     function placeItemInElevator(targetX, targetY) {
         if (!gameState.selectedId) return;
-        
         const item = gameState.items.find(i => i.id === gameState.selectedId);
         if (item.inElevator) return;
 
-        // Создаем виртуальную сетку лифта, чтобы проверить, влезет ли
         let eGrid = [[0,0,0], [0,0,0]];
-        gameState.items.forEach(i => {
-            if (i.inElevator && !i.sent) placeInGrid(eGrid, i.m, i.cx, i.cy, 1);
-        });
+        gameState.items.forEach(i => { if (i.inElevator && !i.sent) placeInGrid(eGrid, i.m, i.cx, i.cy, 1); });
 
         if (canPlace(eGrid, item.m, targetX, targetY)) {
-            item.inElevator = true;
-            item.cx = targetX;
-            item.cy = targetY;
-            gameState.selectedId = null; // Снимаем выделение
-            
-            renderItems();
-            updateUI();
+            item.inElevator = true; item.cx = targetX; item.cy = targetY;
+            gameState.selectedId = null;
+            renderItems(); updateUI();
         }
     }
 
-    // --- ЛОГИКА МАТЕМАТИКИ И ОТПРАВКИ ---
     function updateUI() {
-        let currentWeight = 0;
-        let elevatorItemsCount = 0;
-
-        gameState.items.forEach(i => {
-            if (i.inElevator && !i.sent) {
-                currentWeight += i.w;
-                elevatorItemsCount++;
-            }
-        });
+        let weight = 0, count = 0;
+        gameState.items.forEach(i => { if (i.inElevator && !i.sent) { weight += i.w; count++; } });
 
         const btn = document.getElementById('btn-send');
-        const weightText = document.getElementById('weight-text');
-        const weightBar = document.getElementById('weight-bar');
-        const elevator = document.getElementById('elevator');
+        const text = document.getElementById('weight-text');
+        const bar = document.getElementById('weight-bar');
+        const el = document.getElementById('elevator');
 
-        // Обновление шкалы и текста
-        weightText.innerText = `${currentWeight} / ${MAX_WEIGHT} кг`;
-        let fillPercent = Math.min(100, (currentWeight / MAX_WEIGHT) * 100);
-        weightBar.style.width = `${fillPercent}%`;
+        text.innerText = `${weight} / ${MAX_WEIGHT} кг`;
+        bar.style.width = `${Math.min(100, (weight / MAX_WEIGHT) * 100)}%`;
 
-        // Сброс классов
-        btn.className = '';
-        weightBar.style.backgroundColor = 'var(--green)';
-        weightText.style.color = 'var(--text-color)';
-        elevator.classList.remove('shake');
-        btn.disabled = false;
+        btn.className = 'menu-btn'; bar.style.backgroundColor = 'var(--green)'; text.style.color = 'var(--text-color)';
+        el.classList.remove('shake'); btn.disabled = count === 0;
 
-        if (elevatorItemsCount === 0) {
-            btn.disabled = true;
-        }
-
-        // Проверка веса
-        if (currentWeight > MAX_WEIGHT) {
-            btn.classList.add('btn-overweight');
-            btn.innerText = 'ПЕРЕВЕС!';
-            weightBar.style.backgroundColor = 'var(--red)';
-            weightText.style.color = 'var(--red)';
-            elevator.classList.add('shake');
-            btn.disabled = true;
-        } else if (currentWeight === MAX_WEIGHT) {
+        if (weight > MAX_WEIGHT) {
+            btn.classList.add('btn-overweight'); btn.innerText = 'ПЕРЕВЕС!';
+            bar.style.backgroundColor = 'var(--red)'; text.style.color = 'var(--red)';
+            el.classList.add('shake'); btn.disabled = true;
+        } else if (weight === MAX_WEIGHT) {
             btn.classList.add('btn-perfect');
-            weightBar.style.backgroundColor = 'var(--yellow)';
-            weightText.style.color = 'var(--yellow)';
+            bar.style.backgroundColor = 'var(--yellow)'; text.style.color = 'var(--yellow)';
             btn.innerText = `ОТПРАВИТЬ (${gameState.tripsDone + 1}/3) +10% Бонус!`;
         } else {
             btn.innerText = `ОТПРАВИТЬ (${gameState.tripsDone + 1}/3)`;
@@ -424,32 +478,14 @@
     }
 
     function sendElevator() {
-        let currentWeight = 0;
-        gameState.items.forEach(i => {
-            if (i.inElevator && !i.sent) currentWeight += i.w;
-        });
+        let w = 0;
+        gameState.items.forEach(i => { if (i.inElevator && !i.sent) w += i.w; });
+        if (w === 0 || w > MAX_WEIGHT) return;
 
-        if (currentWeight === 0 || currentWeight > MAX_WEIGHT) return;
-
-        // Подсчет очков
-        if (currentWeight === MAX_WEIGHT) {
-            gameState.score += Math.round(currentWeight * 1.1); // Бонус 10%
-        } else {
-            gameState.score += currentWeight;
-        }
-        
-        if (gameState.score > gameState.bestScore) {
-            gameState.bestScore = gameState.score;
-            localStorage.setItem('liftBestScore', gameState.bestScore);
-            document.getElementById('best-score').innerText = gameState.bestScore;
-        }
+        gameState.score += (w === MAX_WEIGHT) ? Math.round(w * 1.1) : w;
         document.getElementById('score').innerText = gameState.score;
 
-        // Помечаем предметы как отправленные
-        gameState.items.forEach(i => {
-            if (i.inElevator) i.sent = true;
-        });
-
+        gameState.items.forEach(i => { if (i.inElevator) i.sent = true; });
         gameState.tripsDone++;
         checkGameState();
     }
@@ -457,54 +493,94 @@
     function checkGameState() {
         let itemsLeft = gameState.items.filter(i => !i.sent);
         
-        // ПОБЕДА
         if (itemsLeft.length === 0) {
             gameState.level++;
-            showModal('Отличная работа!', `Груз доставлен. Начинаем уровень ${gameState.level}.`, startGame);
+            showModal('Отличная работа!', `Груз доставлен. Начинаем уровень ${gameState.level}.`, `
+                <button class="menu-btn" onclick="closeModal(); startLevel();">Продолжить</button>
+            `);
             return;
         }
 
-        // ПОРАЖЕНИЕ: Кончились ходки
         if (gameState.tripsDone >= MAX_TRIPS) {
-            handleGameOver('Время вышло!', 'Вы исчерпали 3 ходки, а на складе еще остался груз.');
-            return;
+            triggerGameOver('Время вышло!', 'Вы исчерпали 3 ходки, а на складе еще остался груз.'); return;
         }
 
-        // РАННЕЕ ПОРАЖЕНИЕ: Математически не влезет
         let tripsLeft = MAX_TRIPS - gameState.tripsDone;
-        let weightLeft = itemsLeft.reduce((sum, item) => sum + item.w, 0);
-        let cellsLeft = itemsLeft.reduce((sum, item) => sum + getCellCount(item.m), 0);
+        let wLeft = itemsLeft.reduce((sum, i) => sum + i.w, 0);
+        let cLeft = itemsLeft.reduce((sum, i) => sum + getCellCount(i.m), 0);
 
-        if (weightLeft > tripsLeft * MAX_WEIGHT || cellsLeft > tripsLeft * 6) {
-            handleGameOver('Перегруз!', 'К сожалению, оставшиеся на складе товары математически не влезут в оставшиеся рейсы.');
-            return;
+        if (wLeft > tripsLeft * MAX_WEIGHT || cLeft > tripsLeft * 6) {
+            triggerGameOver('Перегруз!', 'Оставшиеся товары не влезут в оставшиеся рейсы.'); return;
         }
 
-        // Игра продолжается
-        renderItems();
-        updateUI();
+        renderItems(); updateUI();
     }
 
-    function handleGameOver(title, desc) {
+    function triggerGameOver(title, desc) {
+        let buttonsHtml = '';
         if (gameState.restartsLeft > 0) {
-            showModal(title, `${desc}<br><br>У вас есть 1 попытка переиграть уровень.`, null, true);
+            buttonsHtml += `<button class="menu-btn" onclick="restartLevelFromModal()">Переиграть уровень</button>`;
         } else {
-            showModal('Игра окончена', `${desc}<br>Ваш итоговый счет: <b>${gameState.score}</b> кг.`, () => {
-                gameState.level = 1;
-                gameState.score = 0;
-                gameState.restartsLeft = 1;
-                startGame();
-            });
+            desc += `<br><br>Ваш итоговый счет: <b>${gameState.score}</b> кг.`;
+        }
+        buttonsHtml += `<button class="menu-btn secondary" onclick="quitToMenu()">В главное меню</button>`;
+        
+        showModal(title, desc, buttonsHtml);
+    }
+
+    // --- МОДАЛКИ И УПРАВЛЕНИЕ ---
+    function showModal(title, text, buttonsHtml) {
+        document.getElementById('overlay-title').innerText = title;
+        document.getElementById('overlay-text').innerHTML = text;
+        document.getElementById('overlay-buttons').innerHTML = buttonsHtml;
+        document.getElementById('overlay').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('overlay').style.display = 'none';
+    }
+
+    function updateRestartButton() {
+        const btn = document.getElementById('btn-restart');
+        if (gameState.restartsLeft > 0) {
+            btn.style.display = 'block';
+            btn.innerText = `Переиграть уровень (Осталось: ${gameState.restartsLeft})`;
+        } else {
+            btn.style.display = 'none';
         }
     }
 
-    // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+    function restartLevelFromModal() {
+        closeModal();
+        restartLevel();
+    }
+
+    function restartLevel() {
+        if (gameState.restartsLeft <= 0) return;
+        gameState.restartsLeft--;
+        gameState.score = gameState.levelStartScore;
+        gameState.tripsDone = 0;
+        gameState.selectedId = null;
+        
+        gameState.items.forEach(i => { i.sent = false; i.inElevator = false; i.cx = i.wx; i.cy = i.wy; });
+        
+        document.getElementById('score').innerText = gameState.score;
+        updateRestartButton(); renderItems(); updateUI();
+    }
+
+    function quitToMenu() {
+        saveRecord(gameState.score);
+        closeModal();
+        openScreen('screen-menu');
+    }
+
+    // --- УТИЛИТЫ СЕТКИ ---
     function canPlace(grid, matrix, startX, startY) {
         for (let r = 0; r < matrix.length; r++) {
             for (let c = 0; c < matrix[r].length; c++) {
                 if (matrix[r][c]) {
-                    if (startY + r >= grid.length || startX + c >= grid[0].length) return false; // За пределами
-                    if (grid[startY + r][startX + c]) return false; // Клетка занята
+                    if (startY + r >= grid.length || startX + c >= grid[0].length) return false;
+                    if (grid[startY + r][startX + c]) return false;
                 }
             }
         }
@@ -519,68 +595,10 @@
         }
     }
 
-    function getCellCount(matrix) {
-        return matrix.flat().filter(v => v === 1).length;
-    }
+    function getCellCount(matrix) { return matrix.flat().filter(v => v === 1).length; }
 
-    // --- МОДАЛЬНОЕ ОКНО И РЕСТАРТ ---
-    let nextActionCallback = null;
-    function showModal(title, text, callback, isGameOverWithRestart = false) {
-        document.getElementById('overlay-title').innerText = title;
-        document.getElementById('overlay-text').innerHTML = text;
-        
-        const btn = document.getElementById('overlay-btn');
-        if (isGameOverWithRestart) {
-            btn.style.display = 'none'; // Скрываем основную кнопку, игрок нажмет "Переиграть" снизу
-        } else {
-            btn.style.display = 'block';
-            btn.innerText = gameState.level === 1 && gameState.score === 0 ? "Начать игру" : "Продолжить";
-            nextActionCallback = callback;
-        }
-        
-        document.getElementById('overlay').style.display = 'flex';
-    }
-
-    function nextAction() {
-        document.getElementById('overlay').style.display = 'none';
-        if (nextActionCallback) nextActionCallback();
-    }
-
-    function updateRestartButton() {
-        const btn = document.getElementById('btn-restart');
-        if (gameState.restartsLeft > 0) {
-            btn.style.display = 'block';
-            btn.innerText = `Переиграть уровень (Осталось: ${gameState.restartsLeft})`;
-        } else {
-            btn.style.display = 'none';
-        }
-    }
-
-    function restartLevel() {
-        if (gameState.restartsLeft <= 0) return;
-        
-        document.getElementById('overlay').style.display = 'none';
-        gameState.restartsLeft--;
-        gameState.score = gameState.levelStartScore;
-        gameState.tripsDone = 0;
-        gameState.selectedId = null;
-        
-        // Возвращаем все предметы на склад
-        gameState.items.forEach(i => {
-            i.sent = false;
-            i.inElevator = false;
-            i.cx = i.wx;
-            i.cy = i.wy;
-        });
-
-        document.getElementById('score').innerText = gameState.score;
-        updateRestartButton();
-        renderItems();
-        updateUI();
-    }
-
-    // Старт при загрузке
-    startGame();
+    // Инициализация при загрузке страницы (обновляем статус кнопок меню)
+    updateMainMenu();
 
 </script>
 </body>
