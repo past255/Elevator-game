@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Игра: Лифт (Склад)</title>
+    <style>
+        :root {
+            --cell-size: 55px; /* Базовый размер клетки */
+            --bg-color: #1e293b;
+            --text-color: #f8fafc;
+            --grid-color: #334155;
+            --green: #22c55e;
+            --yellow: #eab308;
+            --red: #ef4444;
+        }
+
+        * { box-sizing: border-box; touch-action: manipulation; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body {
+            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-color);
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+            user-select: none; -webkit-user-select: none;
+        }
+
+        /* Шапка с очками */
+        header {
+            width: 100%; max-width: 400px; display: flex; justify-content: space-between;
+            padding: 15px 20px; font-weight: bold; font-size: 1.1rem;
+        }
+        
+        .level-text { color: #94a3b8; }
+
+        /* Игровые зоны */
+        .game-area {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            gap: 20px; padding: 10px; width: 100%; max-width: 400px;
+        }
+
+        .grid-container {
+            position: relative; background: #0f172a; border: 2px solid var(--grid-color);
+            border-radius: 8px; overflow: hidden;
+        }
+
+        /* Сетка склада 4x4 */
+        #warehouse { width: calc(var(--cell-size) * 4); height: calc(var(--cell-size) * 4); }
+        
+        /* Сетка лифта 3x2 */
+        #elevator { width: calc(var(--cell-size) * 3); height: calc(var(--cell-size) * 2); border-color: #64748b; }
+
+        /* Отрисовка клеток внутри сеток */
+        .cell-bg {
+            position: absolute; width: var(--cell-size); height: var(--cell-size);
+            border: 1px dashed var(--grid-color);
+        }
+
+        /* Кнопки-невидимки поверх лифта для расстановки */
+        .elevator-slot {
+            position: absolute; width: var(--cell-size); height: var(--cell-size);
+            z-index: 10; cursor: pointer;
+        }
+
+        /* Грузы (Item) */
+        .item {
+            position: absolute; cursor: pointer; transition: transform 0.1s; z-index: 20;
+        }
+        .item.selected { transform: scale(1.05); filter: drop-shadow(0 0 8px rgba(255,255,255,0.5)); z-index: 30; }
+        
+        /* Квадратики внутри груза */
+        .item-block {
+            position: absolute; width: var(--cell-size); height: var(--cell-size);
+            border: 2px solid rgba(0,0,0,0.3); border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 1.1rem; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* Панель управления */
+        .controls {
+            width: 100%; max-width: 400px; padding: 20px; background: #0f172a;
+            border-top-left-radius: 20px; border-top-right-radius: 20px;
+            display: flex; flex-direction: column; gap: 10px; margin-top: auto;
+        }
+
+        .weight-display {
+            text-align: center; font-size: 1.3rem; font-weight: bold; margin-bottom: 5px; transition: color 0.3s;
+        }
+        .weight-bar-bg { width: 100%; height: 10px; background: #334155; border-radius: 5px; overflow: hidden; }
+        .weight-bar-fill { height: 100%; background: var(--green); transition: width 0.3s, background 0.3s; }
+
+        button {
+            padding: 15px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold;
+            color: #fff; background: #3b82f6; cursor: pointer; transition: 0.2s;
+        }
+        button:active { transform: scale(0.98); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Состояния кнопки и лифта */
+        .btn-overweight { background: var(--red) !important; opacity: 1 !important; color: white !important; }
+        .btn-perfect { background: var(--yellow) !important; color: #000 !important; box-shadow: 0 0 15px var(--yellow); }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px) rotate(-1deg); }
+            75% { transform: translateX(3px) rotate(1deg); }
+        }
+        .shake { animation: shake 0.2s ease-in-out infinite; border-color: var(--red) !important; }
+
+        /* Всплывающие сообщения */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: none; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .overlay-content {
+            background: #1e293b; padding: 30px; border-radius: 12px; text-align: center; max-width: 80%;
+        }
+        .overlay h2 { margin-top: 0; color: #fff; }
+        .overlay p { color: #cbd5e1; margin-bottom: 20px; font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>Счет: <span id="score">0</span> <span style="font-size: 0.8rem; color: #fbbf24;">(Рекорд: <span id="best-score">0</span>)</span></div>
+        <div class="level-text">Уровень <span id="level">1</span></div>
+    </header>
+
+    <div class="game-area">
+        <div id="warehouse" class="grid-container"></div>
+        
+        <div style="color: #94a3b8; font-size: 0.9rem;">ЛИФТ (Макс. 60 кг)</div>
+        <div id="elevator" class="grid-container"></div>
+    </div>
+
+    <div class="controls">
+        <div id="weight-text" class="weight-display">0 / 60 кг</div>
+        <div class="weight-bar-bg"><div id="weight-bar" class="weight-bar-fill" style="width: 0%;"></div></div>
+        
+        <button id="btn-send" onclick="sendElevator()">ОТПРАВИТЬ (1/3)</button>
+        <button id="btn-restart" onclick="restartLevel()" style="background: #64748b; display: none;">Переиграть уровень (Осталось: 1)</button>
+    </div>
+
+    <div id="overlay" class="overlay">
+        <div class="overlay-content">
+            <h2 id="overlay-title">Заголовок</h2>
+            <p id="overlay-text">Текст</p>
+            <button onclick="nextAction()" id="overlay-btn">Продолжить</button>
+        </div>
+    </div>
+
+<script>
+    // --- НАСТРОЙКИ И БАЗА ДАННЫХ ФИГУР ---
+    const CELL_SIZE = 55;
+    const MAX_WEIGHT = 60;
+    const MAX_TRIPS = 3;
+
+    // Матрицы: 1 = занято, 0 = пусто
+    const SHAPES = [
+        { m: [[1]], w: 5, c: 'green' },
+        { m: [[1]], w: 10, c: 'yellow' },
+        { m: [[1]], w: 20, c: 'red' },
+        { m: [[1, 1]], w: 5, c: 'green' },
+        { m: [[1, 1]], w: 10, c: 'yellow' },
+        { m: [[1, 1]], w: 20, c: 'red' },
+        { m: [[1], [1]], w: 5, c: 'green' },
+        { m: [[1], [1]], w: 10, c: 'yellow' },
+        { m: [[1], [1]], w: 20, c: 'red' },
+        { m: [[1, 1], [1, 0]], w: 20, c: 'red' } // L-уголок
+    ];
+
+    const COLORS = { 'green': '#22c55e', 'yellow': '#eab308', 'red': '#ef4444' };
+
+    // --- СОСТОЯНИЕ ИГРЫ ---
+    let gameState = {
+        level: 1,
+        score: 0,
+        levelStartScore: 0,
+        bestScore: parseInt(localStorage.getItem('liftBestScore')) || 0,
+        restartsLeft: 1,
+        tripsDone: 0,
+        items: [],
+        selectedId: null
+    };
+
+    // --- ИНИЦИАЛИЗАЦИЯ И РЕНДЕР ---
+    document.getElementById('best-score').innerText = gameState.bestScore;
+
+    function initGrid(elementId, cols, rows) {
+        const container = document.getElementById(elementId);
+        container.innerHTML = '';
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell-bg';
+                cell.style.left = `${x * CELL_SIZE}px`;
+                cell.style.top = `${y * CELL_SIZE}px`;
+                container.appendChild(cell);
+
+                if (elementId === 'elevator') {
+                    const slot = document.createElement('div');
+                    slot.className = 'elevator-slot';
+                    slot.style.left = `${x * CELL_SIZE}px`;
+                    slot.style.top = `${y * CELL_SIZE}px`;
+                    slot.onclick = () => placeItemInElevator(x, y);
+                    container.appendChild(slot);
+                }
+            }
+        }
+    }
+
+    // --- ГЕНЕРАТОР УРОВНЕЙ ---
+    function generateLevel() {
+        let validLevel = false;
+        let generatedItems = [];
+
+        while (!validLevel) {
+            generatedItems = [];
+            let totalCells = 0;
+
+            // 1. Симулируем 3 ходки, заполняя лифты
+            for (let t = 0; t < MAX_TRIPS; t++) {
+                let grid = [[0, 0, 0], [0, 0, 0]]; // Сетка лифта 3x2
+                let currentWeight = 0;
+                let attempts = 30;
+
+                while (attempts-- > 0) {
+                    let shapeTemplate = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+                    if (currentWeight + shapeTemplate.w > MAX_WEIGHT) continue;
+
+                    let x = Math.floor(Math.random() * 3);
+                    let y = Math.floor(Math.random() * 2);
+
+                    if (canPlace(grid, shapeTemplate.m, x, y)) {
+                        placeInGrid(grid, shapeTemplate.m, x, y, 1);
+                        currentWeight += shapeTemplate.w;
+                        totalCells += getCellCount(shapeTemplate.m);
+                        
+                        generatedItems.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            m: shapeTemplate.m,
+                            w: shapeTemplate.w,
+                            c: shapeTemplate.c,
+                            inElevator: false
+                        });
+                    }
+                }
+            }
+
+            // 2. Проверяем ограничения (13-16 клеток)
+            if (totalCells >= 13 && totalCells <= 16) {
+                // 3. Пытаемся разложить всё это на складе 4x4
+                let wGrid = [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]];
+                let allFitted = true;
+                
+                // Сортировка по размеру помогает упаковывать плотнее
+                generatedItems.sort((a, b) => getCellCount(b.m) - getCellCount(a.m));
+
+                for (let item of generatedItems) {
+                    let placed = false;
+                    for (let y = 0; y < 4 && !placed; y++) {
+                        for (let x = 0; x < 4 && !placed; x++) {
+                            if (canPlace(wGrid, item.m, x, y)) {
+                                placeInGrid(wGrid, item.m, x, y, 1);
+                                item.wx = x; item.wy = y; // Родные координаты на складе
+                                item.cx = x; item.cy = y; // Текущие координаты
+                                placed = true;
+                            }
+                        }
+                    }
+                    if (!placed) { allFitted = false; break; }
+                }
+                if (allFitted) validLevel = true;
+            }
+        }
+        return JSON.parse(JSON.stringify(generatedItems)); // Глубокая копия
+    }
+
+    function startGame() {
+        gameState.levelStartScore = gameState.score;
+        gameState.tripsDone = 0;
+        gameState.selectedId = null;
+        gameState.items = generateLevel();
+        
+        document.getElementById('level').innerText = gameState.level;
+        document.getElementById('score').innerText = gameState.score;
+        
+        initGrid('warehouse', 4, 4);
+        initGrid('elevator', 3, 2);
+        
+        updateRestartButton();
+        renderItems();
+        updateUI();
+    }
+
+    // --- РЕНДЕРИНГ И ВЗАИМОДЕЙСТВИЕ ---
+    function renderItems() {
+        document.querySelectorAll('.item').forEach(el => el.remove());
+
+        gameState.items.forEach(item => {
+            if (item.sent) return;
+
+            const div = document.createElement('div');
+            div.className = `item ${gameState.selectedId === item.id ? 'selected' : ''}`;
+            div.onclick = () => selectItem(item.id);
+            
+            // Отрисовка блоков внутри матрицы предмета
+            let isFirstSolid = true;
+            for (let r = 0; r < item.m.length; r++) {
+                for (let c = 0; c < item.m[r].length; c++) {
+                    if (item.m[r][c]) {
+                        const block = document.createElement('div');
+                        block.className = 'item-block';
+                        block.style.backgroundColor = COLORS[item.c];
+                        block.style.left = `${c * CELL_SIZE}px`;
+                        block.style.top = `${r * CELL_SIZE}px`;
+                        
+                        if (isFirstSolid) {
+                            block.innerText = item.w;
+                            isFirstSolid = false;
+                        }
+                        div.appendChild(block);
+                    }
+                }
+            }
+
+            div.style.left = `${item.cx * CELL_SIZE}px`;
+            div.style.top = `${item.cy * CELL_SIZE}px`;
+
+            const parentId = item.inElevator ? 'elevator' : 'warehouse';
+            document.getElementById(parentId).appendChild(div);
+        });
+    }
+
+    function selectItem(id) {
+        const item = gameState.items.find(i => i.id === id);
+        
+        // Если тапнули на предмет в лифте - возвращаем на склад
+        if (item.inElevator) {
+            item.inElevator = false;
+            item.cx = item.wx;
+            item.cy = item.wy;
+            if (gameState.selectedId === id) gameState.selectedId = null;
+        } else {
+            // Выделяем предмет на складе
+            gameState.selectedId = gameState.selectedId === id ? null : id;
+        }
+        
+        renderItems();
+        updateUI();
+    }
+
+    function placeItemInElevator(targetX, targetY) {
+        if (!gameState.selectedId) return;
+        
+        const item = gameState.items.find(i => i.id === gameState.selectedId);
+        if (item.inElevator) return;
+
+        // Создаем виртуальную сетку лифта, чтобы проверить, влезет ли
+        let eGrid = [[0,0,0], [0,0,0]];
+        gameState.items.forEach(i => {
+            if (i.inElevator && !i.sent) placeInGrid(eGrid, i.m, i.cx, i.cy, 1);
+        });
+
+        if (canPlace(eGrid, item.m, targetX, targetY)) {
+            item.inElevator = true;
+            item.cx = targetX;
+            item.cy = targetY;
+            gameState.selectedId = null; // Снимаем выделение
+            
+            renderItems();
+            updateUI();
+        }
+    }
+
+    // --- ЛОГИКА МАТЕМАТИКИ И ОТПРАВКИ ---
+    function updateUI() {
+        let currentWeight = 0;
+        let elevatorItemsCount = 0;
+
+        gameState.items.forEach(i => {
+            if (i.inElevator && !i.sent) {
+                currentWeight += i.w;
+                elevatorItemsCount++;
+            }
+        });
+
+        const btn = document.getElementById('btn-send');
+        const weightText = document.getElementById('weight-text');
+        const weightBar = document.getElementById('weight-bar');
+        const elevator = document.getElementById('elevator');
+
+        // Обновление шкалы и текста
+        weightText.innerText = `${currentWeight} / ${MAX_WEIGHT} кг`;
+        let fillPercent = Math.min(100, (currentWeight / MAX_WEIGHT) * 100);
+        weightBar.style.width = `${fillPercent}%`;
+
+        // Сброс классов
+        btn.className = '';
+        weightBar.style.backgroundColor = 'var(--green)';
+        weightText.style.color = 'var(--text-color)';
+        elevator.classList.remove('shake');
+        btn.disabled = false;
+
+        if (elevatorItemsCount === 0) {
+            btn.disabled = true;
+        }
+
+        // Проверка веса
+        if (currentWeight > MAX_WEIGHT) {
+            btn.classList.add('btn-overweight');
+            btn.innerText = 'ПЕРЕВЕС!';
+            weightBar.style.backgroundColor = 'var(--red)';
+            weightText.style.color = 'var(--red)';
+            elevator.classList.add('shake');
+            btn.disabled = true;
+        } else if (currentWeight === MAX_WEIGHT) {
+            btn.classList.add('btn-perfect');
+            weightBar.style.backgroundColor = 'var(--yellow)';
+            weightText.style.color = 'var(--yellow)';
+            btn.innerText = `ОТПРАВИТЬ (${gameState.tripsDone + 1}/3) +10% Бонус!`;
+        } else {
+            btn.innerText = `ОТПРАВИТЬ (${gameState.tripsDone + 1}/3)`;
+        }
+    }
+
+    function sendElevator() {
+        let currentWeight = 0;
+        gameState.items.forEach(i => {
+            if (i.inElevator && !i.sent) currentWeight += i.w;
+        });
+
+        if (currentWeight === 0 || currentWeight > MAX_WEIGHT) return;
+
+        // Подсчет очков
+        if (currentWeight === MAX_WEIGHT) {
+            gameState.score += Math.round(currentWeight * 1.1); // Бонус 10%
+        } else {
+            gameState.score += currentWeight;
+        }
+        
+        if (gameState.score > gameState.bestScore) {
+            gameState.bestScore = gameState.score;
+            localStorage.setItem('liftBestScore', gameState.bestScore);
+            document.getElementById('best-score').innerText = gameState.bestScore;
+        }
+        document.getElementById('score').innerText = gameState.score;
+
+        // Помечаем предметы как отправленные
+        gameState.items.forEach(i => {
+            if (i.inElevator) i.sent = true;
+        });
+
+        gameState.tripsDone++;
+        checkGameState();
+    }
+
+    function checkGameState() {
+        let itemsLeft = gameState.items.filter(i => !i.sent);
+        
+        // ПОБЕДА
+        if (itemsLeft.length === 0) {
+            gameState.level++;
+            showModal('Отличная работа!', `Груз доставлен. Начинаем уровень ${gameState.level}.`, startGame);
+            return;
+        }
+
+        // ПОРАЖЕНИЕ: Кончились ходки
+        if (gameState.tripsDone >= MAX_TRIPS) {
+            handleGameOver('Время вышло!', 'Вы исчерпали 3 ходки, а на складе еще остался груз.');
+            return;
+        }
+
+        // РАННЕЕ ПОРАЖЕНИЕ: Математически не влезет
+        let tripsLeft = MAX_TRIPS - gameState.tripsDone;
+        let weightLeft = itemsLeft.reduce((sum, item) => sum + item.w, 0);
+        let cellsLeft = itemsLeft.reduce((sum, item) => sum + getCellCount(item.m), 0);
+
+        if (weightLeft > tripsLeft * MAX_WEIGHT || cellsLeft > tripsLeft * 6) {
+            handleGameOver('Перегруз!', 'К сожалению, оставшиеся на складе товары математически не влезут в оставшиеся рейсы.');
+            return;
+        }
+
+        // Игра продолжается
+        renderItems();
+        updateUI();
+    }
+
+    function handleGameOver(title, desc) {
+        if (gameState.restartsLeft > 0) {
+            showModal(title, `${desc}<br><br>У вас есть 1 попытка переиграть уровень.`, null, true);
+        } else {
+            showModal('Игра окончена', `${desc}<br>Ваш итоговый счет: <b>${gameState.score}</b> кг.`, () => {
+                gameState.level = 1;
+                gameState.score = 0;
+                gameState.restartsLeft = 1;
+                startGame();
+            });
+        }
+    }
+
+    // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+    function canPlace(grid, matrix, startX, startY) {
+        for (let r = 0; r < matrix.length; r++) {
+            for (let c = 0; c < matrix[r].length; c++) {
+                if (matrix[r][c]) {
+                    if (startY + r >= grid.length || startX + c >= grid[0].length) return false; // За пределами
+                    if (grid[startY + r][startX + c]) return false; // Клетка занята
+                }
+            }
+        }
+        return true;
+    }
+
+    function placeInGrid(grid, matrix, startX, startY, val) {
+        for (let r = 0; r < matrix.length; r++) {
+            for (let c = 0; c < matrix[r].length; c++) {
+                if (matrix[r][c]) grid[startY + r][startX + c] = val;
+            }
+        }
+    }
+
+    function getCellCount(matrix) {
+        return matrix.flat().filter(v => v === 1).length;
+    }
+
+    // --- МОДАЛЬНОЕ ОКНО И РЕСТАРТ ---
+    let nextActionCallback = null;
+    function showModal(title, text, callback, isGameOverWithRestart = false) {
+        document.getElementById('overlay-title').innerText = title;
+        document.getElementById('overlay-text').innerHTML = text;
+        
+        const btn = document.getElementById('overlay-btn');
+        if (isGameOverWithRestart) {
+            btn.style.display = 'none'; // Скрываем основную кнопку, игрок нажмет "Переиграть" снизу
+        } else {
+            btn.style.display = 'block';
+            btn.innerText = gameState.level === 1 && gameState.score === 0 ? "Начать игру" : "Продолжить";
+            nextActionCallback = callback;
+        }
+        
+        document.getElementById('overlay').style.display = 'flex';
+    }
+
+    function nextAction() {
+        document.getElementById('overlay').style.display = 'none';
+        if (nextActionCallback) nextActionCallback();
+    }
+
+    function updateRestartButton() {
+        const btn = document.getElementById('btn-restart');
+        if (gameState.restartsLeft > 0) {
+            btn.style.display = 'block';
+            btn.innerText = `Переиграть уровень (Осталось: ${gameState.restartsLeft})`;
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    function restartLevel() {
+        if (gameState.restartsLeft <= 0) return;
+        
+        document.getElementById('overlay').style.display = 'none';
+        gameState.restartsLeft--;
+        gameState.score = gameState.levelStartScore;
+        gameState.tripsDone = 0;
+        gameState.selectedId = null;
+        
+        // Возвращаем все предметы на склад
+        gameState.items.forEach(i => {
+            i.sent = false;
+            i.inElevator = false;
+            i.cx = i.wx;
+            i.cy = i.wy;
+        });
+
+        document.getElementById('score').innerText = gameState.score;
+        updateRestartButton();
+        renderItems();
+        updateUI();
+    }
+
+    // Старт при загрузке
+    startGame();
+
+</script>
+</body>
+</html>
